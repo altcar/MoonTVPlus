@@ -112,6 +112,14 @@
 
 Cloudflare Workers 提供免费的边缘计算服务，通过 GitHub Actions 可以实现自动化部署。
 
+> **自动部署（推荐）**：本项目已连接 Cloudflare Workers Builds（Git 集成）。
+> 推送到 `main` 分支的提交会自动构建并部署，无需手动触发：
+>
+> - 构建命令：`pnpm run build:cloudflare`
+> - 部署命令：`npx wrangler deploy`
+>
+> 在 Cloudflare Dashboard 的 **Workers & Pages → moontvplus → Deployments** 中可以查看每次提交对应的构建与部署状态。
+
 #### 前置要求
 
 1. 一个 Cloudflare 账号
@@ -135,23 +143,41 @@ Cloudflare Workers 提供免费的边缘计算服务，通过 GitHub Actions 可
 
 进入你 Fork 的仓库，点击 Settings > Secrets and variables > Actions > New repository secret，添加以下必需的 Secrets：
 
-**必需配置：**
+**必需配置（仅在使用 GitHub Actions 手动/自动部署时需要；Cloudflare Workers Builds 自动构建不需要）：**
 
 | Secret 名称                | 说明                  | 示例值                   |
 | -------------------------- | --------------------- | ------------------------ |
 | `CLOUDFLARE_API_TOKEN`     | Cloudflare API Token  | `your_api_token_here`    |
 | `CLOUDFLARE_ACCOUNT_ID`    | Cloudflare Account ID | `abc123def456`           |
-| `USERNAME`                 | 站长账号              | `admin`                  |
-| `PASSWORD`                 | 站长密码              | `your_secure_password`   |
 | `NEXT_PUBLIC_STORAGE_TYPE` | 存储类型              | `upstash`                |
+| `D1_DATABASE_ID`           | D1 数据库 ID          | `b46bfe10-a77c-...`      |
 | `UPSTASH_URL`              | Upstash Redis URL     | `https://xxx.upstash.io` |
 | `UPSTASH_TOKEN`            | Upstash Redis Token   | `your_upstash_token`     |
 
-**3. 触发部署**
+**3. 配置 Worker Secrets（站长账号密码）**
+
+`USERNAME`、`PASSWORD`、`CRON_PASSWORD` 属于敏感信息，不要写入 `wrangler.toml` 的 `[vars]`，
+而是通过 Wrangler Secret 注入（本地已登录 `wrangler` 的情况下执行）：
+
+```bash
+echo -n "admin" | wrangler secret put USERNAME
+echo -n "your_secure_password" | wrangler secret put PASSWORD
+echo -n "your_cron_password" | wrangler secret put CRON_PASSWORD
+```
+
+也可以使用 Cloudflare Dashboard 的 **Workers & Pages → moontvplus → Settings → Variables → Add** 添加为 Secret。
+
+**4. 触发部署**
 
 配置完成后，有两种方式触发部署：
 
-**方式一：手动触发**
+**方式一：自动触发（Cloudflare Workers Builds，推荐）**
+
+- 在 Cloudflare Dashboard 中进入 Worker，连接你的 GitHub 仓库（Workers & Pages → 创建 Worker → Deploy with Git / Connect to Git）
+- 之后每次推送到 `main` 分支都会自动构建并部署
+- 构建与部署命令可在 **Settings → Builds** 中查看：`pnpm run build:cloudflare` + `npx wrangler deploy`
+
+**方式二：手动触发（GitHub Actions）**
 
 - 进入仓库的 Actions 页面
 - 选择 "Deploy to Cloudflare" workflow
@@ -159,42 +185,29 @@ Cloudflare Workers 提供免费的边缘计算服务，通过 GitHub Actions 可
 - 选择分支（通常是 main 或 dev）
 - 点击 "Run workflow" 开始部署
 
-**方式二：自动触发（可选）**
-
-如果想要在推送代码时自动部署，可以修改 `.github/workflows/cloudflare-deploy.yml` 文件：
-
-```yaml
-on:
-  push:
-    branches:
-      - main  # 或你的主分支名称
-  workflow_dispatch:
-```
-
-**4. 查看部署状态**
+**5. 查看部署状态**
 
 - 在 Actions 页面可以看到部署进度
 - 部署成功后，访问 `https://your-project-name.your-account.workers.dev`
 - 也可以在 Cloudflare Dashboard 的 Workers & Pages 中查看部署的应用
 
-**5. 绑定自定义域名（可选）**
+**6. 绑定自定义域名（可选）**
 
 - 在 Cloudflare Dashboard 中进入你的 Worker
 - 点击 Settings > Triggers > Custom Domains
 - 添加你的自定义域名
 
-**6. 使用 D1 数据库（可选）**
+**7. 使用 D1 数据库（可选）**
 
 如果想使用 Cloudflare D1 数据库代替 Upstash Redis，需要进行以下配置：
 
 1. 在 Cloudflare Dashboard 中创建一个 D1 数据库
 2. 复制数据库 ID
-3. 在 GitHub Secrets 中配置：
-   - 将 `NEXT_PUBLIC_STORAGE_TYPE` 设置为 `d1`
-   - 添加 `D1_DATABASE_ID` 并填入你的数据库 ID
-   - 无需配置 `UPSTASH_URL` 和 `UPSTASH_TOKEN`
+3. 将 `wrangler.toml` 中 `[[d1_databases]]` 的 `database_id` 替换为你的数据库 ID
+4. 将 `NEXT_PUBLIC_STORAGE_TYPE` 设置为 `d1`（Cloudflare Workers Builds 在 Settings → Builds 中配置，GitHub Actions 在 Secrets 中配置）
+5. 无需配置 `UPSTASH_URL` 和 `UPSTASH_TOKEN`
 
-**7. 自定义 Wrangler 变量（可选）**
+**8. 自定义 Wrangler 变量（可选）**
 
 可通过 `VARS`（Repository secret 或 variable）把自定义变量写入 `wrangler.toml` 的 `[vars]`，每行一个 `KEY=VALUE`：
 
